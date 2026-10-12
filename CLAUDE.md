@@ -12,7 +12,9 @@ Bulk QR Reader is a static, browser-only page for GitHub Pages. There is no back
 - **Results:** a grouped, colored list of all codes, with plain-text copy (`[3-2] content` or content only).
 
 **Context:**
-- The UI is in English. The user writes in Turkish.
+- The UI is bilingual (English / Turkish, `js/i18n.js`; header toggle, remembered in `localStorage`). Every user-visible string goes through `t()` or a `data-i18n*` attribute. The user writes in Turkish.
+- Visual design is the "Pebble" theme (`style.css` tokens on `:root`, light + dark). The home screen always shows Camera, Photos and Folder (Folder is hidden on iOS, which has no folder picker). The app keeps no history: everything lives in the current page session.
+- The footer credit ("Murat Süzük … Mercan Eczanesi") must stay visible: in the home privacy card and at the bottom of the workspace.
 - The app is **mobile-first**, and desktop must keep working.
 - A key real-world case is GS1/ITS Data Matrix codes on medicine boxes, photographed as 24–48MP iPhone HEIC files.
 
@@ -41,12 +43,13 @@ python3 -m http.server 8000      # serve the repo, then open http://localhost:80
 
 - Plain ES modules, loaded with `<script type="module">`.
 - Every path must be relative: `./…`, and workers are created with `new URL(..., import.meta.url)`. A leading `/` breaks GitHub Pages subpaths.
-- Third-party code comes only from jsDelivr with **pinned versions**. The URLs are in `js/config.js`; `tools/scenarios.js` also pins the zxing writer.
+- Third-party code comes only from jsDelivr with **pinned versions**. The URLs are in `js/config.js`; `tools/scenarios.js` also pins the zxing writer; `index.html` pins the Bricolage Grotesque font (`@fontsource-variable`).
+- Icons are an inline SVG sprite at the top of `index.html` (`<use href="#i-…">`), not emoji.
 - Decoded content is untrusted: render it with `textContent` only, and never auto-link it.
 
 ## Architecture
 
-**Data flow:** `intake.js` / `camera.js` → `app.js` (state + queue) → `imageLoader.js` + `scanner.js` → `decoderClient.js` ⇄ `decoder.worker.js` → `render.js` (cards + list) / `viewer.js` (zoomable viewer). Tags are drawn by `overlay.js` as SVG over an `<img>`.
+**Data flow:** `intake.js` / `camera.js` → `app.js` (state + queue) → `imageLoader.js` + `scanner.js` → `decoderClient.js` ⇄ `decoder.worker.js` → `render.js` (photo cards + list) / `viewer.js` (zoomable viewer). On phones the workspace has Photos / Codes tabs (`body[data-view]`); on desktop the codes list is a sticky side column. Tags are drawn by `overlay.js` as SVG over an `<img>`.
 
 ### Processing queue and cancellation (`app.js`)
 - **Statuses:** `pending → queued → processing → done | error`. There is a single `pump()` loop, and items with higher `priority` go first (single-shot captures use 1).

@@ -42,10 +42,11 @@ export const READER_OPTIONS = {
   maxNumberOfSymbols: 255,
 };
 
-// High-contrast categorical palette (Sasha Trubetskoy), cycled per QR within an image.
+// Categorical tag palette ("Pebble" theme), cycled per code within an image. Neighbouring
+// entries differ in hue and lightness so adjacent codes stay distinguishable on photos.
 export const PALETTE = [
-  '#e6194B', '#3cb44b', '#4363d8', '#f58231', '#911eb4', '#42d4f4',
-  '#f032e6', '#bfef45', '#ffe119', '#469990', '#9A6324', '#000075',
+  '#ff6b4a', '#2ec4b6', '#4b3bff', '#ffc233', '#ff5fa2', '#3d9bff',
+  '#7ed957', '#9b6bff', '#ff9a1f', '#00a389', '#eceeff', '#c58b3c',
 ];
 
 export const ACCEPTED_EXTENSIONS = new Set([

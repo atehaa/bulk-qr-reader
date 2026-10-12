@@ -20,7 +20,7 @@ export function initThumbnailer({ root, update }) {
       const id = Number(e.target.dataset.id);
       if (e.isIntersecting) visible.add(id); else visible.delete(id);
     }
-  }, { root, rootMargin: '0px 100% 0px 100%' });
+  }, { root, rootMargin: '100% 0px 100% 0px' });
 }
 
 /** Watch a card element (data-id) so its thumbnail is generated early. */

@@ -38,23 +38,22 @@ function createCard(item, handlers) {
   root.dataset.id = item.id;
   root.innerHTML = `
     <div class="head">
-      <span class="num"></span>
       <span class="badge" hidden></span>
       <span class="spacer"></span>
-      <button class="remove" type="button">×</button>
+      <button class="remove" type="button"><svg aria-hidden="true"><use href="#i-close"/></svg></button>
     </div>
     <div class="media" role="button" tabindex="0">
       <img class="thumb" alt="" decoding="async" hidden>
       <div class="placeholder"></div>
     </div>
-    <figcaption><span class="name"></span><span class="info"></span></figcaption>`;
+    <figcaption><span class="cap"><b class="ptitle"></b><span class="name"></span></span><span class="info"></span></figcaption>`;
   const card = {
     item,
     root,
     media: root.querySelector('.media'),
     img: root.querySelector('.thumb'),
     ph: root.querySelector('.placeholder'),
-    num: root.querySelector('.num'),
+    title: root.querySelector('.ptitle'),
     badge: root.querySelector('.badge'),
     name: root.querySelector('.name'),
     info: root.querySelector('.info'),
@@ -89,19 +88,21 @@ function statusText(item) {
 }
 
 function updateCard(card, item, imgNo) {
-  card.num.textContent = imgNo;
+  card.title.textContent = t('photoN', { n: imgNo });
   card.root.classList.toggle('processing', item.status === 'processing');
   card.root.classList.toggle('queued', item.status === 'queued');
   card.root.classList.toggle('noqr', item.status === 'done' && item.qrs.length === 0);
   card.root.classList.toggle('error', item.status === 'error');
+  card.root.classList.toggle('done', item.status === 'done' && item.qrs.length > 0);
   card.media.dataset.label = item.status === 'processing' ? t('scanning') : item.status === 'queued' ? t('queued') : '';
   card.remove.title = t('removeImage');
   card.remove.setAttribute('aria-label', t('removeImage'));
   card.media.setAttribute('aria-label', t('openImage'));
 
+  // The code count is in the caption; the badge on the photo only flags problems.
   let badge = '';
   if (item.status === 'error') badge = t('error');
-  else if (item.status === 'done') badge = item.qrs.length ? codes(item.qrs.length) : t('noCode');
+  else if (item.status === 'done' && !item.qrs.length) badge = t('noCode');
   card.badge.hidden = !badge;
   card.badge.textContent = badge;
   card.info.textContent = statusText(item);
@@ -156,13 +157,6 @@ export function renderGallery(items, handlers) {
 export function renderCard(item, imgNo) {
   const card = cards.get(item.id);
   if (card) updateCard(card, item, imgNo);
-}
-
-export function scrollToCard(item) {
-  const el = cards.get(item.id)?.root;
-  const g = $('#gallery');
-  if (!el || !g) return;
-  g.scrollTo({ left: el.offsetLeft - (g.clientWidth - el.clientWidth) / 2, behavior: 'smooth' });
 }
 
 /* ---------- results ---------- */
@@ -226,9 +220,10 @@ function buildGroup(item, imgNo, handlers) {
       txt.title = q.text;
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = 'btn small copy1';
-      btn.textContent = t('copy');
-      btn.setAttribute('aria-label', t('copyCode', { tag: `${imgNo}-${i + 1}` }));
+      btn.className = 'copy1';
+      btn.innerHTML = '<svg aria-hidden="true"><use href="#i-copy"/></svg>';
+      btn.title = t('copyCode', { tag: `${imgNo}-${i + 1}` });
+      btn.setAttribute('aria-label', btn.title);
       btn.onclick = (e) => {
         e.stopPropagation();
         handlers.onCopyOne(q.text);

@@ -46,6 +46,7 @@ There is no build step, and all paths are relative, so it works under `https://<
 
 - [zxing-wasm](https://github.com/Sec-ant/zxing-wasm) 3.1.5 decodes multiple 2D codes with corner positions. It runs in a Web Worker.
 - [heic-to](https://github.com/hoppergee/heic-to) 1.6.6 converts HEIC. It is loaded only when the browser can't decode HEIC natively.
+- [Bricolage Grotesque](https://fontsource.org/fonts/bricolage-grotesque) 5.2.10 (`@fontsource-variable`) is the UI font.
 
 ## Development tools
 

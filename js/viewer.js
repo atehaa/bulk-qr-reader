@@ -209,8 +209,10 @@ function renderPanel(item, imgNo) {
     txt.textContent = q.text || '(empty)';
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'btn small copy1';
-    btn.textContent = t('copy');
+    btn.className = 'copy1';
+    btn.innerHTML = '<svg aria-hidden="true"><use href="#i-copy"/></svg>';
+    btn.title = t('copyCode', { tag: `${imgNo}-${i + 1}` });
+    btn.setAttribute('aria-label', btn.title);
     btn.onclick = (e) => {
       e.stopPropagation();
       copyText(q.text).then(ok => ok && toast(t('copied')));

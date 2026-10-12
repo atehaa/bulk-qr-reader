@@ -7,10 +7,12 @@ const NS = 'http://www.w3.org/2000/svg';
 
 export const colorFor = (i) => PALETTE[i % PALETTE.length];
 
+/** Black or white, whichever has the higher WCAG contrast against the tag color. */
 export function textColorFor(hex) {
   const n = parseInt(hex.slice(1), 16);
-  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-  return (0.299 * r + 0.587 * g + 0.114 * b) > 150 ? '#000' : '#fff';
+  const lin = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+  const L = 0.2126 * lin((n >> 16) & 255) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255);
+  return (L + 0.05) / 0.05 >= 1.05 / (L + 0.05) ? '#000' : '#fff';
 }
 
 function el(name, attrs = {}) {
@@ -66,7 +68,7 @@ export function layoutLabels(svg, k) {
     const f = fontPx / k; // in image units
     const text = lab.querySelector('text');
     const chars = text.textContent.length;
-    const pad = f * 0.3;
+    const pad = f * 0.45;
     const w = chars * f * 0.62 + pad * 2;
     const h = f * 1.35;
     const box = bbox(q.points);
@@ -78,7 +80,7 @@ export function layoutLabels(svg, k) {
     rect.setAttribute('y', y);
     rect.setAttribute('width', w);
     rect.setAttribute('height', h);
-    rect.setAttribute('rx', f * 0.2);
+    rect.setAttribute('rx', h / 2);
     text.setAttribute('x', x + pad);
     text.setAttribute('y', y + h * 0.72);
     text.setAttribute('font-size', f);

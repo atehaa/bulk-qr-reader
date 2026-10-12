@@ -76,7 +76,7 @@ export function initCamera(h) {
   const soundBtn = $('.cam-sound', dlg);
   const syncSound = () => {
     soundBtn.setAttribute('aria-pressed', String(soundOn()));
-    soundBtn.textContent = soundOn() ? '🔊' : '🔇';
+    soundBtn.querySelector('use').setAttribute('href', soundOn() ? '#i-sound' : '#i-mute');
   };
   syncSound();
   soundBtn.addEventListener('click', () => {

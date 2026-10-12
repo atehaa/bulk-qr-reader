@@ -5,7 +5,7 @@ import { loadBitmap, withDecodeLock, releaseItemUrls, viewerCacheSize } from './
 import { scanBitmap } from './scanner.js';
 import { decoderReady } from './decoderClient.js';
 import { initThumbnailer, requestThumb, thumbFromBitmap } from './thumbnailer.js';
-import { renderGallery, renderCard, renderResults, buildLines, scrollToCard } from './render.js';
+import { renderGallery, renderCard, renderResults, buildLines } from './render.js';
 import * as viewer from './viewer.js';
 import * as camera from './camera.js';
 import { copyText } from './clipboard.js';
@@ -76,6 +76,7 @@ function addCandidates(candidates, { source = 'pick', quiet = false, status = 'p
     if (unsupported) parts.push(t('unsupported', { n: unsupported }));
     toast(parts.join(' · '));
   }
+  if (added.length) setView('photos');
   refresh();
   if (status === 'queued') pump();
   return added;
@@ -123,7 +124,6 @@ async function pump() {
   refresh();
   try {
     for (let item = nextQueued(); item; item = nextQueued()) {
-      if (!state.camSession && !viewer.isOpen()) scrollToCard(item);
       await processItem(item);
     }
   } finally {
@@ -302,8 +302,17 @@ function refreshControls() {
   const active = items.filter(i => i.status === 'queued' || i.status === 'processing').length;
   const finished = items.filter(i => i.status === 'done' || i.status === 'error').length;
 
+  const nCodes = items.reduce((n, i) => n + (i.status === 'done' ? i.qrs.length : 0), 0);
   document.body.classList.toggle('has-items', items.length > 0);
-  $('#count').textContent = t('images', { n: items.length });
+  $('#wsTitle').textContent = finished ? t('codesFound', { n: nCodes }) : t('images', { n: items.length });
+  const images = t('images', { n: items.length });
+  $('#count').textContent = active ? t('scanning') : pending ? t('wsSubPending') : t('wsSubDone', { images });
+
+  // Phones: Photos / Codes tabs. The Codes tab needs something to show.
+  const hasResults = finished > 0;
+  if (!hasResults) setView('photos');
+  $('.view-tabs [data-view="codes"]').disabled = !hasResults;
+  $('#tabCodesN').textContent = hasResults ? nCodes : '';
 
   // While scanning (and nothing new to queue) the Process buttons show live progress.
   const busy = active > 0;
@@ -316,6 +325,11 @@ function refreshControls() {
     btn.textContent = label;
     btn.classList.toggle('busy', showProgress);
   }
+  // Bottom bar: Process while there is something to scan, then Copy all.
+  const showCopy = pending === 0 && !busy && nCodes > 0;
+  $('.bb-process').hidden = showCopy;
+  $('.bb-copy').hidden = !showCopy;
+  $('.bb-copy').textContent = t('copyN', { n: nCodes });
   for (const btn of document.querySelectorAll('[data-action="reprocess"]')) {
     btn.hidden = finished === 0;
     btn.disabled = items.length === 0;
@@ -346,6 +360,14 @@ function copyLines(lines) {
   copyText(lines.join('\n')).then((ok) => {
     if (ok) toast(t('copiedLines', { n: lines.length }));
   });
+}
+
+/* ---------- view tabs (phones) ---------- */
+
+function setView(view) {
+  if (document.body.dataset.tab === view) return;
+  document.body.dataset.tab = view;
+  document.querySelectorAll('.view-tabs [data-view]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.view === view)));
 }
 
 /* ---------- menu sheet ---------- */
@@ -426,16 +448,10 @@ function wire() {
     addCandidates(files.map(f => ({ file: f, relPath: syntheticName('pasted', f.type.split('/')[1] || 'png') })), { source: 'paste' });
   });
 
-  // Vertical wheel scrolls the horizontal gallery (mouse users).
-  const gallery = $('#gallery');
-  gallery.addEventListener('wheel', (e) => {
-    const maxLeft = gallery.scrollWidth - gallery.clientWidth;
-    const canMove = e.deltaY > 0 ? gallery.scrollLeft < maxLeft - 1 : gallery.scrollLeft > 0;
-    if (Math.abs(e.deltaY) > Math.abs(e.deltaX) && canMove) {
-      gallery.scrollLeft += e.deltaY;
-      e.preventDefault();
-    }
-  }, { passive: false });
+  document.querySelectorAll('.view-tabs [data-view]').forEach(b => b.addEventListener('click', () => {
+    setView(b.dataset.view);
+    $('#workspace').scrollIntoView({ block: 'start' });
+  }));
 
   window.addEventListener('beforeunload', (e) => {
     if (state.items.some(i => i.status === 'done')) {
@@ -444,7 +460,7 @@ function wire() {
     }
   });
 
-  initThumbnailer({ root: gallery, update: itemChanged });
+  initThumbnailer({ root: null, update: itemChanged });
   viewer.initViewer({
     getItems: () => state.items,
     onRetake: () => camera.openCamera('single'),
@@ -458,6 +474,7 @@ function wire() {
       const shots = state.camSession?.ids.length || 0;
       state.camSession = null;
       if (mode === 'bulk' && shots) {
+        setView('photos');
         refresh();
         $('#workspace').scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
