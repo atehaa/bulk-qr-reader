@@ -1,4 +1,5 @@
 // Copy text reliably on desktop and mobile (incl. iOS and inside modal dialogs).
+import { t } from './i18n.js';
 
 function topLayerHost() {
   const open = [...document.querySelectorAll('dialog[open]')];
@@ -30,7 +31,7 @@ function showManualCopy(text) {
   const host = topLayerHost();
   const box = document.createElement('div');
   box.className = 'manual-copy';
-  box.innerHTML = '<p>Copy is blocked here. Press and hold the text, then choose <b>Copy</b>.</p><textarea readonly></textarea><button type="button" class="btn">Close</button>';
+  box.innerHTML = `<p>${t('manualCopy')}</p><textarea readonly></textarea><button type="button" class="btn">${t('close')}</button>`;
   const ta = box.querySelector('textarea');
   ta.value = text;
   box.querySelector('button').onclick = () => box.remove();

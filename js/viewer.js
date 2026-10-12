@@ -8,6 +8,8 @@ import { bbox, flattenText } from './geometry.js';
 import { copyText } from './clipboard.js';
 import { pushModal, popModal } from './nav.js';
 import { toast } from './toast.js';
+import { t, getLang } from './i18n.js';
+import { errText } from './render.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 
@@ -24,7 +26,7 @@ let shownKey = '';
 let svg = null;
 let srcToken = 0;
 
-const codes = (n) => `${n} code${n === 1 ? '' : 's'}`;
+const codes = (n) => t('codes', { n });
 
 export function initViewer({ getItems, onRetake, onClosed }) {
   items = getItems;
@@ -117,11 +119,11 @@ function show(index, focusQr) {
   const item = list[idx];
   const imgNo = idx + 1;
 
-  $('.v-title', dlg).textContent = `Image ${imgNo} / ${list.length} · ${item.relPath}`;
+  $('.v-title', dlg).textContent = t('imageOf', { i: imgNo, n: list.length, name: item.relPath });
   $('.v-prev', dlg).disabled = idx === 0;
   $('.v-next', dlg).disabled = idx === list.length - 1;
 
-  const key = `${item.id}:${imgNo}:${item.status}:${item.qrs.length}:${item.width}:${item.thumbUrl ? 1 : 0}`;
+  const key = `${item.id}:${imgNo}:${item.status}:${item.qrs.length}:${item.width}:${item.thumbUrl ? 1 : 0}:${getLang()}`;
   const sameImage = shownKey.split(':')[0] === String(item.id) && shownKey.split(':')[4] === String(item.width);
   if (key !== shownKey) {
     shownKey = key;
@@ -141,7 +143,7 @@ function renderImage(item, imgNo, keepZoom) {
   const status = $('.v-status', dlg);
   const busy = item.status === 'processing' || item.status === 'queued' || item.status === 'pending';
   status.hidden = !(busy && (mode === 'single' || item.status === 'processing'));
-  status.textContent = item.status === 'pending' ? 'Not processed yet' : 'Scanning…';
+  status.textContent = item.status === 'pending' ? t('notProcessedYet') : t('scanning');
 
   svg?.remove();
   svg = null;
@@ -149,7 +151,7 @@ function renderImage(item, imgNo, keepZoom) {
     // dimensions come with the thumbnail; ask for it first
     content.hidden = true;
     $('.v-loading', dlg).hidden = false;
-    $('.v-loading', dlg).textContent = item.thumbState === 'error' ? `Preview failed: ${item.thumbError || ''}` : 'Loading preview…';
+    $('.v-loading', dlg).textContent = item.thumbState === 'error' ? t('previewFailed', { msg: item.thumbError || '' }) : t('loadingPreview');
     bumpThumb(item);
     return;
   }
@@ -187,10 +189,10 @@ function renderPanel(item, imgNo) {
   list.replaceChildren();
 
   let headText;
-  if (item.status === 'done') headText = item.qrs.length ? codes(item.qrs.length) : 'No code decoded';
-  else if (item.status === 'error') headText = `Error: ${item.error}`;
-  else if (item.status === 'pending') headText = 'Not processed yet — press Process';
-  else headText = 'Scanning…';
+  if (item.status === 'done') headText = item.qrs.length ? codes(item.qrs.length) : t('noCode');
+  else if (item.status === 'error') headText = t('errorMsg', { msg: errText(item) });
+  else if (item.status === 'pending') headText = t('notProcessedPress');
+  else headText = t('scanning');
   head.textContent = headText;
   head.className = 'v-panel-head' + (item.status === 'done' && !item.qrs.length ? ' warn' : '') + (item.status === 'error' ? ' err' : '');
 
@@ -208,10 +210,10 @@ function renderPanel(item, imgNo) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'btn small copy1';
-    btn.textContent = 'Copy';
+    btn.textContent = t('copy');
     btn.onclick = (e) => {
       e.stopPropagation();
-      copyText(q.text).then(ok => ok && toast('Copied'));
+      copyText(q.text).then(ok => ok && toast(t('copied')));
     };
     row.append(chip, txt, btn);
     row.onclick = () => {
@@ -232,15 +234,20 @@ function renderPanel(item, imgNo) {
     return b;
   };
   if (item.qrs.length > 1 || (mode === 'single' && item.qrs.length)) {
-    add(item.qrs.length > 1 ? `Copy all ${item.qrs.length}` : 'Copy', 'primary', () => {
+    add(item.qrs.length > 1 ? t('copyAllN', { n: item.qrs.length }) : t('copy'), 'primary', () => {
       const lines = item.qrs.map(q => flattenText(q.text));
-      copyText(lines.join('\n')).then(ok => ok && toast(`Copied ${lines.length} line${lines.length === 1 ? '' : 's'}`));
+      copyText(lines.join('\n')).then(ok => ok && toast(t('copiedLines', { n: lines.length })));
     });
   }
   if (mode === 'single') {
-    add('Retake', '', () => { close(); hooks.onRetake?.(); });
-    add('Done', 'ghost', () => close());
+    add(t('retake'), '', () => { close(); hooks.onRetake?.(); });
+    add(t('done'), 'ghost', () => close());
   }
+}
+
+/** Re-render the current image (e.g. after a language change). */
+export function refresh() {
+  if (dlg?.open) show(idx);
 }
 
 export function debugState() {

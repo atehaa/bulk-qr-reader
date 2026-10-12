@@ -28,6 +28,11 @@ export const CAMERA_VIDEO = {
 export const CAPTURE_JPEG_Q = 0.92;
 // Pending capture encodes before the shutter shows "busy" (each 8MP frame is ~32MB).
 export const CAPTURE_QUEUE_MAX = 3;
+// Live preview tracing: long side of the decoded preview copy, minimum pause between decodes,
+// and how long a code stays outlined after it was last seen.
+export const LIVE_SIDE = 1280;
+export const LIVE_GAP_MS = 120;
+export const LIVE_HOLD_MS = 600;
 
 // All common 2D codes: pharma boxes (ITS/GS1) use Data Matrix, not QR.
 // textMode defaults to "HRI", so GS1 content reads like "(01)0869...(21)..." .

@@ -3,11 +3,14 @@ import { HEIC_TO_URL, HEIC_EXTENSIONS, THUMB_MAX, VIEWER_CACHE } from './config.
 
 let heicModule = null;
 
+/** Error with a translation key (shown via t(code)) and an English message for logs. */
+const coded = (code, msg) => Object.assign(new Error(msg), { code });
+
 async function loadHeicTo() {
   if (!heicModule) {
     heicModule = import(HEIC_TO_URL).catch((err) => {
       heicModule = null; // allow a retry later
-      throw new Error('HEIC converter unavailable (' + (err?.message || err) + ')');
+      throw coded('errHeicUnavailable', `HEIC converter unavailable (${err?.message || err})`);
     });
   }
   return heicModule;
@@ -44,13 +47,13 @@ export async function loadBitmap(file) {
     return { bitmap: await createImageBitmap(file), native: true };
   } catch {
     if (!(await looksLikeHeic(file))) {
-      throw new Error('Could not decode image (unsupported or corrupt file)');
+      throw coded('errDecode', 'Could not decode image (unsupported or corrupt file)');
     }
     const { heicTo } = await loadHeicTo();
     try {
       return { bitmap: await heicTo({ blob: file, type: 'bitmap' }), native: false };
     } catch (err) {
-      throw new Error('HEIC conversion failed (' + (err?.message || err) + ')');
+      throw coded('errHeicFailed', `HEIC conversion failed (${err?.message || err})`);
     }
   }
 }

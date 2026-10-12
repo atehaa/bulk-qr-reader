@@ -10,6 +10,7 @@ import * as viewer from './viewer.js';
 import * as camera from './camera.js';
 import { copyText } from './clipboard.js';
 import { toast } from './toast.js';
+import { t, applyI18n, setLang, onLangChange } from './i18n.js';
 
 const $ = (sel) => document.querySelector(sel);
 const params = new URLSearchParams(location.search);
@@ -29,7 +30,7 @@ let tokenSeq = 0;
 const handlers = {
   onRemove: removeItem,
   onOpen: (item, focusQr) => viewer.open(state.items.indexOf(item), { focusQr }),
-  onCopyOne: (text) => copyText(text).then(ok => ok && toast('Copied')),
+  onCopyOne: (text) => copyText(text).then(ok => ok && toast(t('copied'))),
 };
 
 /* ---------- adding / removing ---------- */
@@ -70,9 +71,9 @@ function addCandidates(candidates, { source = 'pick', quiet = false, status = 'p
     requestThumb(item);
   }
   if (!quiet && candidates.length) {
-    const parts = [`Added ${added.length} image${added.length === 1 ? '' : 's'}`];
-    if (duplicates) parts.push(`skipped ${duplicates} duplicate${duplicates === 1 ? '' : 's'}`);
-    if (unsupported) parts.push(`${unsupported} unsupported file${unsupported === 1 ? '' : 's'} ignored`);
+    const parts = [t('added', { n: added.length })];
+    if (duplicates) parts.push(t('skippedDup', { n: duplicates }));
+    if (unsupported) parts.push(t('unsupported', { n: unsupported }));
     toast(parts.join(' · '));
   }
   refresh();
@@ -90,7 +91,7 @@ function removeItem(item) {
   state.items.splice(idx, 1);
   releaseItemUrls(item);
   if (idx < state.items.length && state.items.some(i => i.status === 'done')) {
-    toast('Image removed · numbers after it shifted by one');
+    toast(t('removed'));
   }
   refresh();
 }
@@ -171,6 +172,7 @@ async function processItem(item) {
     if (err?.name !== 'AbortError' && isCurrent()) {
       item.status = 'error';
       item.error = String(err?.message || err);
+      item.errorKey = err?.code || null;
       console.error(item.relPath, err);
     }
   } finally {
@@ -196,7 +198,7 @@ function stop(notify = true) {
   let n = 0;
   for (const item of state.items) if (item.status === 'queued') { item.status = 'pending'; n++; }
   refresh();
-  if (notify && (cur || n)) toast('Stopped');
+  if (notify && (cur || n)) toast(t('stopped'));
 }
 
 function reprocessAll() {
@@ -224,6 +226,7 @@ function cameraHud() {
     dots: items.map(i => ({
       state: i.status === 'done' ? (i.qrs.length ? 'done' : 'empty') : i.status === 'error' ? 'error' : 'busy',
       n: i.qrs.length,
+      thumbUrl: i.thumbUrl,
     })),
   };
 }
@@ -274,7 +277,7 @@ function onNativeFiles(files, mode) {
     added[0].priority = 1;
     viewer.open(state.items.indexOf(added[0]), { mode: 'single' });
   } else if (added.length) {
-    toast('Photo added — tap Camera again for the next one');
+    toast(t('nativeAdded'));
   }
 }
 
@@ -300,12 +303,18 @@ function refreshControls() {
   const finished = items.filter(i => i.status === 'done' || i.status === 'error').length;
 
   document.body.classList.toggle('has-items', items.length > 0);
-  $('#count').textContent = `${items.length} image${items.length === 1 ? '' : 's'}`;
+  $('#count').textContent = t('images', { n: items.length });
 
-  const label = pending === 0 ? 'Process' : `Process ${pending}${finished ? ' new' : ''}`;
+  // While scanning (and nothing new to queue) the Process buttons show live progress.
+  const busy = active > 0;
+  const total = active + finished;
+  const showProgress = busy && pending === 0;
+  const label = showProgress ? t('scanningProgress', { done: finished, total })
+    : pending === 0 ? t('process') : t(finished || busy ? 'processNewN' : 'processN', { n: pending });
   for (const btn of document.querySelectorAll('[data-action="process"]')) {
     btn.disabled = pending === 0 || !state.decoderOk;
     btn.textContent = label;
+    btn.classList.toggle('busy', showProgress);
   }
   for (const btn of document.querySelectorAll('[data-action="reprocess"]')) {
     btn.hidden = finished === 0;
@@ -313,16 +322,15 @@ function refreshControls() {
   }
   for (const btn of document.querySelectorAll('[data-action="clear"]')) btn.disabled = items.length === 0;
 
-  const busy = active > 0;
   $('#progress').hidden = !busy;
+  document.body.classList.toggle('scanning', busy);
   if (busy) {
-    const total = active + items.filter(i => (i.status === 'done' || i.status === 'error') && i.scanToken).length;
-    const doneN = total - active;
-    $('#progressBar').style.width = `${total ? Math.round((doneN / total) * 100) : 0}%`;
+    $('#progressBar').style.width = `${total ? Math.round((finished / total) * 100) : 0}%`;
     const cur = state.current?.item;
     $('#progressText').textContent = cur
-      ? `Scanning ${state.items.indexOf(cur) + 1} · ${cur.relPath} · ${active} left`
-      : `${active} queued`;
+      ? t('progressScanning', { i: state.items.indexOf(cur) + 1, name: cur.relPath })
+      : t('progressQueued', { n: active });
+    $('#progressCount').textContent = `${finished}/${total} · ${t('progressLeft', { n: active })}`;
   }
 }
 
@@ -336,7 +344,7 @@ function refresh() {
 
 function copyLines(lines) {
   copyText(lines.join('\n')).then((ok) => {
-    if (ok) toast(`Copied ${lines.length} line${lines.length === 1 ? '' : 's'}`);
+    if (ok) toast(t('copiedLines', { n: lines.length }));
   });
 }
 
@@ -458,6 +466,14 @@ function wire() {
 }
 
 async function boot() {
+  applyI18n();
+  document.querySelectorAll('[data-lang]').forEach(b => b.addEventListener('click', () => setLang(b.dataset.lang)));
+  onLangChange(() => {
+    refresh();
+    viewer.refresh();
+    camera.refreshTexts();
+    camera.updateHud();
+  });
   if (params.has('fakecam')) await import('../tools/fakecam.js');
   wire();
   refresh();
@@ -472,7 +488,7 @@ async function boot() {
       const el = $('#decoderStatus');
       el.hidden = false;
       el.classList.add('fatal');
-      el.textContent = `Decoder failed to load: ${err.message}. Check your internet connection and reload.`;
+      el.textContent = t('decoderFailed', { msg: err.message });
     });
 
   if (params.has('debug')) {

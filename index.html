@@ -16,31 +16,41 @@
   <header class="top">
     <div class="brand">
       <h1>Bulk QR Reader</h1>
-      <p>QR &amp; Data Matrix from photos, folders or the camera — all in your browser, nothing is uploaded.</p>
+      <p data-i18n="tagline">QR &amp; Data Matrix from photos, folders or the camera — all in your browser, nothing is uploaded.</p>
     </div>
     <div class="pickers desk-only">
-      <button type="button" class="btn" data-action="camera">📷 Camera</button>
-      <button type="button" class="btn" data-action="pick-files">Choose images</button>
-      <button type="button" class="btn" data-action="pick-folder">Choose folder</button>
+      <button type="button" class="btn" data-action="camera"><span aria-hidden="true">📷</span><span data-i18n="camera">Camera</span></button>
+      <button type="button" class="btn" data-action="pick-files" data-i18n="chooseImages">Choose images</button>
+      <button type="button" class="btn" data-action="pick-folder" data-i18n="chooseFolder">Choose folder</button>
+    </div>
+    <div class="lang" role="group" data-i18n-aria="language" aria-label="Language">
+      <button type="button" data-lang="tr" aria-pressed="false" title="Türkçe">
+        <svg viewBox="0 0 30 20" aria-hidden="true"><rect width="30" height="20" fill="#E30A17"/><circle cx="11.25" cy="10" r="5" fill="#fff"/><circle cx="12.5" cy="10" r="4" fill="#E30A17"/><polygon fill="#fff" points="15.00,10.00 16.35,9.53 16.38,8.10 17.25,9.24 18.62,8.82 17.80,10.00 18.62,11.18 17.25,10.76 16.38,11.90 16.35,10.47"/></svg>
+        TR
+      </button>
+      <button type="button" data-lang="en" aria-pressed="false" title="English">
+        <svg viewBox="0 0 60 30" aria-hidden="true"><clipPath id="ukS"><path d="M0,0 v30 h60 v-30 z"/></clipPath><clipPath id="ukT"><path d="M30,15 h30 v15 z v15 h-30 z h-30 v-15 z v-15 h30 z"/></clipPath><g clip-path="url(#ukS)"><path d="M0,0 v30 h60 v-30 z" fill="#012169"/><path d="M0,0 L60,30 M60,0 L0,30" stroke="#fff" stroke-width="6"/><path d="M0,0 L60,30 M60,0 L0,30" clip-path="url(#ukT)" stroke="#C8102E" stroke-width="4"/><path d="M30,0 v30 M0,15 h60" stroke="#fff" stroke-width="10"/><path d="M30,0 v30 M0,15 h60" stroke="#C8102E" stroke-width="6"/></g></svg>
+        EN
+      </button>
     </div>
     <input id="filesInput" type="file" multiple accept="image/*,.heic,.heif" hidden>
     <input id="folderInput" type="file" webkitdirectory multiple hidden>
     <input id="nativeCamInput" type="file" accept="image/*" capture="environment" hidden>
   </header>
 
-  <div id="decoderStatus" class="decoder-status">Loading decoder…</div>
+  <div id="decoderStatus" class="decoder-status" data-i18n="loadingDecoder">Loading decoder…</div>
 
   <main>
     <section id="empty" class="empty">
       <div class="dz-inner">
         <div class="dz-icon" aria-hidden="true">▣</div>
-        <p class="dz-title">Scan codes from photos</p>
-        <p class="dz-sub hide-touch">Drag &amp; drop images or folders anywhere, or paste with <kbd>⌘/Ctrl</kbd>+<kbd>V</kbd>.</p>
-        <p class="dz-sub show-touch">Take photos with the camera or pick them from your library.</p>
+        <p class="dz-title" data-i18n="emptyTitle">Scan codes from photos</p>
+        <p class="dz-sub hide-touch" data-i18n-html="emptySubDesk"></p>
+        <p class="dz-sub show-touch" data-i18n="emptySubTouch"></p>
         <div class="empty-actions">
-          <button type="button" class="btn primary big" data-action="camera">📷 Scan with camera</button>
-          <button type="button" class="btn big" data-action="pick-files">🖼 Choose photos</button>
-          <button type="button" class="btn big" data-action="pick-folder">📁 Choose folder</button>
+          <button type="button" class="btn primary big" data-action="camera"><span aria-hidden="true">📷</span><span data-i18n="scanWithCamera">Scan with camera</span></button>
+          <button type="button" class="btn big" data-action="pick-files"><span aria-hidden="true">🖼</span><span data-i18n="choosePhotos">Choose photos</span></button>
+          <button type="button" class="btn big" data-action="pick-folder"><span aria-hidden="true">📁</span><span data-i18n="chooseFolder">Choose folder</span></button>
         </div>
         <p class="dz-formats">JPEG · PNG · HEIC · WebP · AVIF · GIF · BMP</p>
       </div>
@@ -49,123 +59,135 @@
     <section id="workspace">
       <div class="toolbar">
         <span id="count" class="count"></span>
-        <label class="check desk-only" title="More scales and settings. Slower, occasionally finds a few more codes.">
-          <input type="checkbox" data-setting="thorough"> Thorough scan
+        <label class="check desk-only" data-i18n-title="thoroughHint">
+          <input type="checkbox" data-setting="thorough"> <span data-i18n="thorough">Thorough scan</span>
         </label>
         <span class="spacer"></span>
-        <button type="button" class="btn ghost desk-only" data-action="clear">Clear all</button>
-        <button type="button" class="btn desk-only" data-action="reprocess" hidden>Re-process all</button>
+        <button type="button" class="btn ghost desk-only" data-action="clear" data-i18n="clearAll">Clear all</button>
+        <button type="button" class="btn desk-only" data-action="reprocess" data-i18n="reprocessAll" hidden>Re-process all</button>
         <button type="button" class="btn primary desk-only" data-action="process">Process</button>
-        <button type="button" class="btn icon mobile-only" data-action="menu" aria-label="More actions">⋯</button>
+        <button type="button" class="btn icon mobile-only" data-action="menu" data-i18n-aria="moreActions" aria-label="More actions">⋯</button>
       </div>
 
       <div id="progress" class="progress" hidden>
-        <div class="bar"><div id="progressBar"></div></div>
-        <span id="progressText"></span>
-        <button type="button" class="btn ghost small" data-action="stop">Stop</button>
+        <span class="spinner" aria-hidden="true"></span>
+        <div class="progress-main">
+          <div class="progress-line"><span id="progressText"></span><span id="progressCount"></span></div>
+          <div class="bar"><div id="progressBar"></div></div>
+        </div>
+        <button type="button" class="btn ghost small" data-action="stop" data-i18n="stop">Stop</button>
       </div>
 
       <div id="gallery" class="gallery" aria-label="Images"></div>
 
       <section id="results" class="results" hidden>
         <div class="results-head">
-          <h2>Decoded codes</h2>
+          <h2 data-i18n="decodedCodes">Decoded codes</h2>
           <p id="summary" class="summary"></p>
         </div>
         <div class="copy-all">
-          <button id="copyLabeled" type="button" class="btn primary" data-action="copy-labeled">Copy with labels</button>
-          <button id="copyContent" type="button" class="btn" data-action="copy-content">Copy content only</button>
+          <button id="copyLabeled" type="button" class="btn primary" data-action="copy-labeled" data-i18n="copyLabeled">Copy with labels</button>
+          <button id="copyContent" type="button" class="btn" data-action="copy-content" data-i18n="copyContent">Copy content only</button>
         </div>
         <div id="list" class="list"></div>
         <details class="plain">
-          <summary>Show as plain text</summary>
+          <summary data-i18n="showPlain">Show as plain text</summary>
           <textarea id="plainOutput" readonly spellcheck="false" wrap="off" rows="8"></textarea>
         </details>
-        <p class="hint">Tag <code>3-2</code> = image 3, code 2 — the same colored tag is drawn on the image. Tap a row to zoom to it. Reads QR, Data Matrix, Aztec and PDF417; line breaks inside a code are shown as ⏎.</p>
+        <p class="hint" data-i18n-html="hint"></p>
       </section>
     </section>
   </main>
 
+  <footer class="credit">
+    <span class="credit-mark" aria-hidden="true">✚</span>
+    <span data-i18n-html="footer">Developed by <b>Murat Süzük</b> for <b>Mercan Eczanesi</b>.</span>
+  </footer>
+
   <nav class="bottombar" aria-label="Actions">
-    <button type="button" class="bb-btn" data-action="camera"><span aria-hidden="true">📷</span>Camera</button>
-    <button type="button" class="bb-btn" data-action="pick-files"><span aria-hidden="true">🖼</span>Photos</button>
+    <button type="button" class="bb-btn" data-action="camera"><span aria-hidden="true">📷</span><span data-i18n="camera">Camera</span></button>
+    <button type="button" class="bb-btn" data-action="pick-files"><span aria-hidden="true">🖼</span><span data-i18n="photos">Photos</span></button>
     <button type="button" class="bb-btn primary" data-action="process">Process</button>
   </nav>
 
-  <div id="dropOverlay" class="drop-overlay" hidden><div>Drop images or folders</div></div>
+  <div id="dropOverlay" class="drop-overlay" hidden><div data-i18n="dropHere">Drop images or folders</div></div>
 
   <dialog id="menu" class="sheet">
-    <h3>More</h3>
-    <button type="button" class="sheet-btn" data-action="pick-folder">📁 Choose folder</button>
+    <h3 data-i18n="more">More</h3>
+    <button type="button" class="sheet-btn" data-action="pick-folder">📁 <span data-i18n="chooseFolder">Choose folder</span></button>
     <label class="sheet-btn check">
-      <input type="checkbox" data-setting="thorough"> Thorough scan <small>slower, occasionally finds more</small>
+      <input type="checkbox" data-setting="thorough"> <span data-i18n="thorough">Thorough scan</span> <small data-i18n="thoroughSmall">slower, occasionally finds more</small>
     </label>
-    <button type="button" class="sheet-btn" data-action="reprocess" hidden>↻ Re-process all</button>
-    <button type="button" class="sheet-btn danger" data-action="clear">Clear all</button>
-    <form method="dialog"><button class="btn ghost wide">Close</button></form>
+    <button type="button" class="sheet-btn" data-action="reprocess" hidden>↻ <span data-i18n="reprocessAll">Re-process all</span></button>
+    <button type="button" class="sheet-btn danger" data-action="clear" data-i18n="clearAll">Clear all</button>
+    <form method="dialog"><button class="btn ghost wide" data-i18n="close">Close</button></form>
   </dialog>
 
   <dialog id="camChooser" class="sheet">
-    <h3>Camera</h3>
+    <h3 data-i18n="camera">Camera</h3>
     <button type="button" class="sheet-btn mode" data-mode="single">
-      <b>Single shot</b><small>Snap one photo and see its codes right away.</small>
+      <b data-i18n="singleShot">Single shot</b><small data-i18n="singleShotDesc">Snap one photo and see its codes right away.</small>
     </button>
     <button type="button" class="sheet-btn mode" data-mode="bulk">
-      <b>Bulk</b><small>Snap many photos in a row; they are scanned in the background, review at the end.</small>
+      <b data-i18n="bulk">Bulk</b><small data-i18n="bulkDesc">Snap many photos in a row; they are scanned in the background, review at the end.</small>
     </button>
-    <button type="button" class="link" data-native>Use the phone's camera app instead</button>
-    <button type="button" class="btn ghost wide" data-cancel>Cancel</button>
+    <button type="button" class="link" data-native data-i18n="useNativeCamera">Use the phone's camera app instead</button>
+    <button type="button" class="btn ghost wide" data-cancel data-i18n="cancel">Cancel</button>
   </dialog>
 
-  <dialog id="camera" class="camera" aria-label="Camera">
+  <dialog id="camera" class="camera" data-i18n-aria="camera" aria-label="Camera">
     <video playsinline muted autoplay></video>
+    <canvas class="cam-trace" aria-hidden="true"></canvas>
     <div class="cam-flash"></div>
     <div class="cam-top">
-      <button type="button" class="cam-btn cam-close" aria-label="Close camera">✕</button>
-      <div class="cam-mode" role="group" aria-label="Mode">
-        <button type="button" data-mode="single">Single</button>
-        <button type="button" data-mode="bulk">Bulk</button>
+      <button type="button" class="cam-btn cam-close" data-i18n-aria="closeCamera" aria-label="Close camera">✕</button>
+      <div class="cam-mode" role="group" data-i18n-aria="mode" aria-label="Mode">
+        <button type="button" data-mode="single" data-i18n="modeSingle">Single</button>
+        <button type="button" data-mode="bulk" data-i18n="modeBulk">Bulk</button>
       </div>
-      <span class="cam-res"></span>
-      <button type="button" class="cam-btn cam-torch" aria-label="Flashlight" aria-pressed="false" hidden>⚡</button>
-      <button type="button" class="cam-btn cam-switch" aria-label="Switch camera" hidden>⟲</button>
+      <button type="button" class="cam-btn cam-live" data-i18n-aria="liveDetect" aria-label="Live detection" aria-pressed="true">◎</button>
+      <button type="button" class="cam-btn cam-sound" data-i18n-aria="sound" aria-label="Shutter sound" aria-pressed="true">🔊</button>
+      <button type="button" class="cam-btn cam-torch" data-i18n-aria="flashlight" aria-label="Flashlight" aria-pressed="false" hidden>⚡</button>
+      <button type="button" class="cam-btn cam-switch" data-i18n-aria="switchCamera" aria-label="Switch camera" hidden>⟲</button>
     </div>
+    <span class="cam-res"></span>
     <p class="cam-status"></p>
     <div class="cam-error" hidden>
       <p class="cam-error-text"></p>
-      <button type="button" class="btn primary cam-native">Use phone camera app</button>
+      <button type="button" class="btn primary cam-native" data-i18n="usePhoneCamera">Use phone camera app</button>
     </div>
     <div class="cam-bottom">
+      <span class="cam-seen" hidden></span>
       <p class="cam-hint"></p>
       <div class="cam-bulk">
         <span class="cam-count"></span>
-        <div class="cam-dots"></div>
+        <div class="cam-shots" aria-live="polite"></div>
       </div>
-      <input class="cam-zoom" type="range" aria-label="Zoom" hidden>
+      <input class="cam-zoom" type="range" data-i18n-aria="zoom" aria-label="Zoom" hidden>
       <div class="cam-row">
         <span class="cam-side"></span>
-        <button type="button" class="shutter" aria-label="Take photo"></button>
-        <span class="cam-side"><button type="button" class="btn cam-done">Done</button></span>
+        <button type="button" class="shutter" data-i18n-aria="takePhoto" aria-label="Take photo"><span class="shutter-n"></span></button>
+        <span class="cam-side"><button type="button" class="btn cam-done" data-i18n="done">Done</button></span>
       </div>
     </div>
   </dialog>
 
-  <dialog id="viewer" class="viewer" aria-label="Image viewer">
+  <dialog id="viewer" class="viewer" data-i18n-aria="viewer" aria-label="Image viewer">
     <div class="v-top">
-      <button type="button" class="btn icon v-close" aria-label="Close">✕</button>
+      <button type="button" class="btn icon v-close" data-i18n-aria="close" aria-label="Close">✕</button>
       <span class="v-title"></span>
       <span class="spacer"></span>
-      <button type="button" class="btn icon v-zoom-out hide-touch" aria-label="Zoom out">−</button>
-      <button type="button" class="btn icon v-fit hide-touch" aria-label="Fit">⤢</button>
-      <button type="button" class="btn icon v-zoom-in hide-touch" aria-label="Zoom in">+</button>
-      <button type="button" class="btn icon v-prev" aria-label="Previous image">‹</button>
-      <button type="button" class="btn icon v-next" aria-label="Next image">›</button>
+      <button type="button" class="btn icon v-zoom-out hide-touch" data-i18n-aria="zoomOut" aria-label="Zoom out">−</button>
+      <button type="button" class="btn icon v-fit hide-touch" data-i18n-aria="fit" aria-label="Fit">⤢</button>
+      <button type="button" class="btn icon v-zoom-in hide-touch" data-i18n-aria="zoomIn" aria-label="Zoom in">+</button>
+      <button type="button" class="btn icon v-prev" data-i18n-aria="prevImage" aria-label="Previous image">‹</button>
+      <button type="button" class="btn icon v-next" data-i18n-aria="nextImage" aria-label="Next image">›</button>
     </div>
     <div class="v-body">
       <div class="v-stage">
         <div class="v-content"><img class="v-img" alt="" draggable="false"></div>
         <p class="v-loading" hidden></p>
-        <p class="v-status" hidden>Scanning…</p>
+        <p class="v-status" hidden></p>
       </div>
       <aside class="v-panel">
         <p class="v-panel-head"></p>

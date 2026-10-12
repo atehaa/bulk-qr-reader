@@ -3,11 +3,17 @@
 import { buildOverlay, layoutLabels, colorFor, textColorFor } from './overlay.js';
 import { flattenText } from './geometry.js';
 import { observeCard, unobserveCard } from './thumbnailer.js';
+import { t, num, getLang } from './i18n.js';
 
 const $ = (sel) => document.querySelector(sel);
 const cards = new Map(); // item.id → card refs
 const groups = new Map(); // item.id → { root, key }
-const codes = (n) => `${n} code${n === 1 ? '' : 's'}`;
+const codes = (n) => t('codes', { n });
+
+/** Error text for an item, translated when the error is a known one. */
+export function errText(item) {
+  return item.errorKey ? t(item.errorKey) : item.error;
+}
 
 /* ---------- label layout on resize ---------- */
 
@@ -35,9 +41,9 @@ function createCard(item, handlers) {
       <span class="num"></span>
       <span class="badge" hidden></span>
       <span class="spacer"></span>
-      <button class="remove" type="button" title="Remove image" aria-label="Remove image">×</button>
+      <button class="remove" type="button">×</button>
     </div>
-    <div class="media" role="button" tabindex="0" aria-label="Open image">
+    <div class="media" role="button" tabindex="0">
       <img class="thumb" alt="" decoding="async" hidden>
       <div class="placeholder"></div>
     </div>
@@ -52,6 +58,7 @@ function createCard(item, handlers) {
     badge: root.querySelector('.badge'),
     name: root.querySelector('.name'),
     info: root.querySelector('.info'),
+    remove: root.querySelector('.remove'),
     svg: null,
     key: '',
   };
@@ -73,31 +80,36 @@ function createCard(item, handlers) {
 
 function statusText(item) {
   switch (item.status) {
-    case 'pending': return 'Not processed';
-    case 'queued': return 'Queued';
-    case 'processing': return 'Scanning…';
-    case 'error': return item.error;
-    default: return item.ms ? `${codes(item.qrs.length)} · ${(item.ms / 1000).toFixed(1)}s` : codes(item.qrs.length);
+    case 'pending': return t('notProcessed');
+    case 'queued': return t('queued');
+    case 'processing': return t('scanning');
+    case 'error': return errText(item);
+    default: return item.ms ? `${codes(item.qrs.length)} · ${t('seconds', { s: num(item.ms / 1000) })}` : codes(item.qrs.length);
   }
 }
 
 function updateCard(card, item, imgNo) {
   card.num.textContent = imgNo;
   card.root.classList.toggle('processing', item.status === 'processing');
+  card.root.classList.toggle('queued', item.status === 'queued');
   card.root.classList.toggle('noqr', item.status === 'done' && item.qrs.length === 0);
   card.root.classList.toggle('error', item.status === 'error');
+  card.media.dataset.label = item.status === 'processing' ? t('scanning') : item.status === 'queued' ? t('queued') : '';
+  card.remove.title = t('removeImage');
+  card.remove.setAttribute('aria-label', t('removeImage'));
+  card.media.setAttribute('aria-label', t('openImage'));
 
   let badge = '';
-  if (item.status === 'error') badge = 'Error';
-  else if (item.status === 'done') badge = item.qrs.length ? codes(item.qrs.length) : 'No code decoded';
+  if (item.status === 'error') badge = t('error');
+  else if (item.status === 'done') badge = item.qrs.length ? codes(item.qrs.length) : t('noCode');
   card.badge.hidden = !badge;
   card.badge.textContent = badge;
   card.info.textContent = statusText(item);
-  card.root.title = item.status === 'error' ? `${item.relPath}\n${item.error}` : item.relPath;
+  card.root.title = item.status === 'error' ? `${item.relPath}\n${errText(item)}` : item.relPath;
 
   if (item.width) card.media.style.aspectRatio = `${item.width} / ${item.height}`;
 
-  const key = `${imgNo}:${item.status}:${item.qrs.length}:${item.thumbUrl}:${item.width}`;
+  const key = `${imgNo}:${item.status}:${item.qrs.length}:${item.thumbUrl}:${item.width}:${getLang()}`;
   if (card.key === key) return;
   card.key = key;
 
@@ -109,8 +121,8 @@ function updateCard(card, item, imgNo) {
     card.img.hidden = true;
     card.ph.hidden = false;
     card.ph.textContent = item.thumbState === 'error'
-      ? (item.isHeicLike ? 'HEIC preview failed' : 'Preview unavailable')
-      : 'Loading preview…';
+      ? t(item.isHeicLike ? 'heicPreviewFailed' : 'previewUnavailable')
+      : t('loadingPreview');
   }
 
   card.svg?.remove();
@@ -188,14 +200,14 @@ function buildGroup(item, imgNo, handlers) {
   root.append(head);
 
   if (item.status === 'error') {
-    count.textContent = 'Error';
+    count.textContent = t('error');
     root.classList.add('error');
     const row = document.createElement('div');
     row.className = 'row note';
-    row.textContent = item.error;
+    row.textContent = errText(item);
     root.append(row);
   } else if (!item.qrs.length) {
-    count.textContent = 'No code decoded';
+    count.textContent = t('noCode');
     root.classList.add('noqr');
   } else {
     count.textContent = codes(item.qrs.length);
@@ -215,8 +227,8 @@ function buildGroup(item, imgNo, handlers) {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'btn small copy1';
-      btn.textContent = 'Copy';
-      btn.setAttribute('aria-label', `Copy code ${imgNo}-${i + 1}`);
+      btn.textContent = t('copy');
+      btn.setAttribute('aria-label', t('copyCode', { tag: `${imgNo}-${i + 1}` }));
       btn.onclick = (e) => {
         e.stopPropagation();
         handlers.onCopyOne(q.text);
@@ -242,7 +254,7 @@ export function renderResults(items, handlers) {
   let pos = 0;
   items.forEach((item, idx) => {
     if (!live.has(item.id)) return;
-    const key = `${idx + 1}:${item.status}:${item.qrs.length}:${item.scanToken}`;
+    const key = `${idx + 1}:${item.status}:${item.qrs.length}:${item.scanToken}:${getLang()}`;
     let g = groups.get(item.id);
     if (!g || g.key !== key) {
       const root = buildGroup(item, idx + 1, handlers);
@@ -271,10 +283,10 @@ export function renderResults(items, handlers) {
     s.textContent = text;
     summary.append(s);
   };
-  part(`${done.length} of ${items.length} image${items.length === 1 ? '' : 's'} scanned`);
+  part(t('scannedOf', { done: done.length, total: items.length }));
   part(codes(labeled.length));
-  if (noQr.length) part(`${noQr.length} with no code (#${noQr.join(', #')})`, 'warn');
-  if (failed.length) part(`${failed.length} failed`, 'err');
+  if (noQr.length) part(t('withNoCode', { n: noQr.length, list: noQr.join(', #') }), 'warn');
+  if (failed.length) part(t('failedN', { n: failed.length }), 'err');
 
   $('#results').hidden = shown.length === 0;
   for (const id of ['copyLabeled', 'copyContent']) $(`#${id}`).disabled = labeled.length === 0;

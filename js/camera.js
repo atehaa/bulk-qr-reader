@@ -5,9 +5,13 @@ import { bitmapToJpeg } from './imageLoader.js';
 import { syntheticName } from './intake.js';
 import { pushModal, popModal } from './nav.js';
 import { toast } from './toast.js';
+import { t } from './i18n.js';
+import { playShutter, soundOn, setSound, unlockAudio } from './sound.js';
+import { startTrace, stopTrace } from './liveTrace.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const MODE_KEY = 'bqr.cameraMode';
+const LIVE_KEY = 'bqr.liveTrace';
 
 let hooks = {};
 let chooser;
@@ -29,6 +33,12 @@ function savedMode() {
 }
 function saveMode(m) {
   try { localStorage.setItem(MODE_KEY, m); } catch { /* private mode */ }
+}
+function liveOn() {
+  try { return localStorage.getItem(LIVE_KEY) !== '0'; } catch { return true; }
+}
+function setLive(on) {
+  try { localStorage.setItem(LIVE_KEY, on ? '1' : '0'); } catch { /* private mode */ }
 }
 
 /**
@@ -63,6 +73,25 @@ export function initCamera(h) {
   });
 
   $('.shutter', dlg).addEventListener('click', shoot);
+  const soundBtn = $('.cam-sound', dlg);
+  const syncSound = () => {
+    soundBtn.setAttribute('aria-pressed', String(soundOn()));
+    soundBtn.textContent = soundOn() ? '🔊' : '🔇';
+  };
+  syncSound();
+  soundBtn.addEventListener('click', () => {
+    setSound(!soundOn());
+    syncSound();
+    if (soundOn()) playShutter();
+  });
+  const liveBtn = $('.cam-live', dlg);
+  liveBtn.setAttribute('aria-pressed', String(liveOn()));
+  liveBtn.addEventListener('click', () => {
+    setLive(!liveOn());
+    liveBtn.setAttribute('aria-pressed', String(liveOn()));
+    if (liveOn() && stream) beginTrace();
+    else stopTrace();
+  });
   $('.cam-close', dlg).addEventListener('click', () => closeCamera());
   $('.cam-done', dlg).addEventListener('click', () => closeCamera());
   $('.cam-torch', dlg).addEventListener('click', toggleTorch);
@@ -117,6 +146,8 @@ export function isCameraOpen() {
 export function openCamera(m = savedMode()) {
   setMode(m);
   showError(null);
+  unlockAudio(); // inside the user gesture, so iOS lets the shutter sound play later
+  lastShotCount = -1;
   dlg.showModal();
   document.documentElement.classList.add('modal-open');
   pushModal(cameraBack);
@@ -142,13 +173,12 @@ function setMode(m) {
   saveMode(mode);
   dlg.classList.toggle('bulk', mode === 'bulk');
   dlg.querySelectorAll('.cam-mode button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mode === mode)));
-  $('.cam-hint', dlg).textContent = mode === 'bulk'
-    ? 'Bulk: keep shooting — every photo is scanned in the background.'
-    : 'Single shot: snap once to see the codes right away.';
+  $('.cam-hint', dlg).textContent = t(mode === 'bulk' ? 'hintBulk' : 'hintSingle');
   updateHud();
 }
 
 function stopTracks() {
+  stopTrace();
   stream?.getTracks().forEach(t => t.stop());
   stream = null;
   if (video) video.srcObject = null;
@@ -165,14 +195,12 @@ function start(deviceId) {
   stopTracks();
   const seq = ++startSeq;
   if (!navigator.mediaDevices?.getUserMedia) {
-    showError(window.isSecureContext
-      ? 'This browser has no camera access.'
-      : 'The camera needs a secure (https) page.', true);
+    showError(t(window.isSecureContext ? 'camNoApi' : 'camInsecure'), true);
     return;
   }
   const constraints = { audio: false, video: deviceId ? { ...CAMERA_VIDEO, facingMode: undefined, deviceId: { exact: deviceId } } : CAMERA_VIDEO };
   const req = navigator.mediaDevices.getUserMedia(constraints);
-  $('.cam-status', dlg).textContent = 'Starting camera…';
+  $('.cam-status', dlg).textContent = t('startingCamera');
   req.then(async (s) => {
     if (seq !== startSeq || !dlg.open) { s.getTracks().forEach(t => t.stop()); return; }
     stream = s;
@@ -182,19 +210,28 @@ function start(deviceId) {
     await video.play().catch(() => {});
     $('.cam-status', dlg).textContent = '';
     showError(null);
+    if (liveOn()) beginTrace();
     await setupControls(track);
   }).catch((err) => {
     if (seq !== startSeq) return;
     const name = err?.name;
     if (name === 'NotAllowedError' || name === 'SecurityError') {
-      showError('Camera access was blocked. Allow the camera for this site in your browser settings (on iPhone: Settings → Safari → Camera), or use the phone camera app.', true);
+      showError(t('camBlocked'), true);
     } else if (name === 'NotFoundError' || name === 'OverconstrainedError') {
-      showError('No camera was found on this device.', true);
+      showError(t('camNotFound'), true);
     } else if (name === 'NotReadableError') {
-      showError('The camera is busy in another app. Close it and try again.', true);
+      showError(t('camBusy'), true);
     } else {
-      showError(`Camera could not start (${err?.message || name}).`, true);
+      showError(t('camFailed', { msg: err?.message || name }), true);
     }
+  });
+}
+
+function beginTrace() {
+  const seen = $('.cam-seen', dlg);
+  startTrace(video, $('.cam-trace', dlg), (n) => {
+    seen.hidden = !n;
+    seen.textContent = n ? t('inView', { n }) : '';
   });
 }
 
@@ -294,7 +331,46 @@ function flash() {
   f.classList.remove('on');
   void f.offsetWidth;
   f.classList.add('on');
-  navigator.vibrate?.(25);
+  const sh = $('.shutter', dlg);
+  sh.classList.remove('fired');
+  void sh.offsetWidth;
+  sh.classList.add('fired');
+  navigator.vibrate?.(30);
+  playShutter();
+}
+
+/**
+ * Bulk feedback: a small copy of the captured frame flies from the preview into the shot strip,
+ * so every capture is visibly "taken" and lands where its scan status appears.
+ */
+function flyToStrip(bitmap) {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const vr = video.getBoundingClientRect();
+  const k = Math.min(vr.width / bitmap.width, vr.height / bitmap.height);
+  const w = bitmap.width * k;
+  const h = bitmap.height * k;
+  const c = document.createElement('canvas');
+  c.className = 'cam-fly';
+  c.width = Math.round(Math.min(320, w));
+  c.height = Math.round((c.width * h) / w);
+  c.getContext('2d').drawImage(bitmap, 0, 0, c.width, c.height);
+  c.style.left = `${vr.left + (vr.width - w) / 2}px`;
+  c.style.top = `${vr.top + (vr.height - h) / 2}px`;
+  c.style.width = `${w}px`;
+  c.style.height = `${h}px`;
+  c.style.transformOrigin = '0 0';
+  dlg.append(c);
+  const strip = $('.cam-shots', dlg).getBoundingClientRect();
+  const tw = 60;
+  const tx = (strip.width ? strip.right - tw : vr.left + vr.width / 2 - tw / 2) - parseFloat(c.style.left);
+  const ty = (strip.height ? strip.top : vr.bottom - 160) - parseFloat(c.style.top);
+  const s = tw / w;
+  c.animate([
+    { transform: 'translate(0, 0) scale(1)', opacity: 1, borderRadius: '0px' },
+    { transform: `translate(0, 0) scale(${Math.max(s, 0.6)})`, opacity: 1, offset: 0.25 },
+    { transform: `translate(${tx}px, ${ty}px) scale(${s})`, opacity: 0.9, borderRadius: `${8 / s}px` },
+  ], { duration: 520, easing: 'cubic-bezier(.3,.7,.2,1)' }).finished
+    .finally(() => c.remove());
 }
 
 function setShutterBusy(b) {
@@ -304,7 +380,7 @@ function setShutterBusy(b) {
 async function shoot() {
   if (!stream || !video.videoWidth || busy) return;
   if (encodeQueue.length >= CAPTURE_QUEUE_MAX) {
-    toast('Saving previous shots…');
+    toast(t('savingShots'));
     return;
   }
   flash();
@@ -318,7 +394,7 @@ async function shoot() {
       closeCamera();
       hooks.onCapture({ file, bitmap, mode: 'single' });
     } catch (err) {
-      toast(`Capture failed: ${err?.message || err}`);
+      toast(t('captureFailed', { msg: err?.message || err }));
     } finally {
       busy = false;
       setShutterBusy(false);
@@ -326,11 +402,13 @@ async function shoot() {
     return;
   }
   try {
-    encodeQueue.push(await grabFrame());
+    const frame = await grabFrame();
+    flyToStrip(frame);
+    encodeQueue.push(frame);
     setShutterBusy(encodeQueue.length >= CAPTURE_QUEUE_MAX);
     pumpEncode();
   } catch (err) {
-    toast(`Capture failed: ${err?.message || err}`);
+    toast(t('captureFailed', { msg: err?.message || err }));
   }
 }
 
@@ -346,7 +424,7 @@ async function pumpEncode() {
         hooks.onCapture({ file, bitmap, mode: 'bulk' });
       } catch (err) {
         bitmap.close();
-        toast(`Could not save photo: ${err?.message || err}`);
+        toast(t('saveFailed', { msg: err?.message || err }));
       }
       encodeQueue.shift();
       setShutterBusy(encodeQueue.length >= CAPTURE_QUEUE_MAX);
@@ -356,22 +434,49 @@ async function pumpEncode() {
   }
 }
 
-/** Refresh the bulk counters / per-shot dots. Called by the app when items change. */
+let lastShotCount = -1;
+
+/** Refresh the bulk counter and the strip of recent shots. Called by the app when items change. */
 export function updateHud() {
   if (!dlg?.open) return;
   const hud = hooks.getHud?.() || { shots: 0, scanned: 0, codes: 0, dots: [] };
   $('.cam-count', dlg).textContent = hud.shots
-    ? `${hud.shots} shot${hud.shots === 1 ? '' : 's'} · ${hud.scanned} scanned · ${hud.codes} code${hud.codes === 1 ? '' : 's'}`
-    : 'No shots yet';
-  $('.cam-done', dlg).textContent = hud.shots ? `Done (${hud.shots})` : 'Done';
-  const dots = $('.cam-dots', dlg);
-  dots.replaceChildren(...hud.dots.slice(-24).map((d) => {
-    const s = document.createElement('span');
-    s.className = `dot ${d.state}`;
-    if (d.state === 'done') s.textContent = d.n;
-    s.title = { done: `${d.n} codes`, empty: 'No code decoded — retake?', error: 'Error' }[d.state] || 'Scanning…';
-    return s;
+    ? t('hud', { shots: t('shots', { n: hud.shots }), scanned: hud.scanned, codes: t('codes', { n: hud.codes }) })
+    : t('noShots');
+  $('.cam-count', dlg).classList.toggle('busy', hud.scanned < hud.shots);
+  $('.cam-done', dlg).textContent = hud.shots ? t('doneN', { n: hud.shots }) : t('done');
+  $('.shutter-n', dlg).textContent = mode === 'bulk' && hud.shots ? hud.shots : '';
+
+  // Last shots, newest on the right: thumbnail + scan state.
+  const strip = $('.cam-shots', dlg);
+  const recent = hud.dots.slice(-6);
+  const firstIndex = hud.dots.length - recent.length;
+  strip.replaceChildren(...recent.map((d, i) => {
+    const el = document.createElement('span');
+    el.className = `shot ${d.state}`;
+    if (firstIndex + i >= lastShotCount && lastShotCount >= 0) el.classList.add('new');
+    if (d.thumbUrl) {
+      const img = document.createElement('img');
+      img.src = d.thumbUrl;
+      img.alt = '';
+      el.append(img);
+    }
+    const b = document.createElement('b');
+    b.textContent = d.state === 'done' ? `✓ ${d.n}` : d.state === 'empty' ? '!' : d.state === 'error' ? '×' : '';
+    el.append(b);
+    const no = document.createElement('i');
+    no.textContent = firstIndex + i + 1;
+    el.append(no);
+    el.title = { done: t('codes', { n: d.n }), empty: t('shotEmpty'), error: t('error') }[d.state] || t('shotScanning');
+    return el;
   }));
+  lastShotCount = hud.dots.length;
+}
+
+/** Re-apply texts after a language change. */
+export function refreshTexts() {
+  if (!dlg?.open) return;
+  setMode(mode);
 }
 
 export function cameraMode() {
