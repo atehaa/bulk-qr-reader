@@ -482,10 +482,59 @@ function wire() {
   });
 }
 
+/* ---------- decoder status banner ---------- */
+
+// Slow networks: after this long the banner says so and offers a reload.
+const DECODER_SLOW_MS = 12000;
+let decoderStatus = { kind: 'loading', key: 'loadingDecoder', vars: {} };
+
+function showDecoderStatus(kind, key, vars = {}) {
+  decoderStatus = { kind, key, vars };
+  renderDecoderStatus();
+}
+
+function renderDecoderStatus() {
+  const el = $('#decoderStatus');
+  const { kind, key, vars } = decoderStatus;
+  el.hidden = kind === 'ok';
+  el.classList.toggle('slow', kind === 'slow');
+  el.classList.toggle('fatal', kind === 'fatal');
+  el.querySelector('.ds-text').textContent = t(key, vars);
+  el.querySelector('.ds-reload').hidden = kind !== 'slow' && kind !== 'fatal';
+}
+
 async function boot() {
+  // Hook up the decoder first, so a failure further down can never leave "Loading…" up forever.
+  const slowTimer = setTimeout(() => {
+    if (!state.decoderOk && decoderStatus.kind === 'loading') showDecoderStatus('slow', 'decoderSlow');
+  }, DECODER_SLOW_MS);
+  decoderReady
+    .then(() => {
+      clearTimeout(slowTimer);
+      state.decoderOk = true;
+      if (decoderStatus.kind !== 'fatal') showDecoderStatus('ok', 'loadingDecoder');
+      refreshControls();
+      pump();
+    })
+    .catch((err) => {
+      clearTimeout(slowTimer);
+      showDecoderStatus('fatal', 'decoderFailed', { msg: err.message });
+    });
+  try {
+    await start();
+    window.__bqrBooted = true;
+  } catch (err) {
+    console.error(err);
+    window.__bqrBooted = true;
+    showDecoderStatus('fatal', 'appError', { msg: err?.message || String(err) });
+  }
+}
+
+async function start() {
   applyI18n();
   document.querySelectorAll('[data-lang]').forEach(b => b.addEventListener('click', () => setLang(b.dataset.lang)));
   onLangChange(() => {
+    renderDecoderStatus();
     refresh();
     viewer.refresh();
     camera.refreshTexts();
@@ -494,19 +543,6 @@ async function boot() {
   if (params.has('fakecam')) await import('../tools/fakecam.js');
   wire();
   refresh();
-  decoderReady
-    .then(() => {
-      state.decoderOk = true;
-      $('#decoderStatus').hidden = true;
-      refreshControls();
-      pump();
-    })
-    .catch((err) => {
-      const el = $('#decoderStatus');
-      el.hidden = false;
-      el.classList.add('fatal');
-      el.textContent = t('decoderFailed', { msg: err.message });
-    });
 
   if (params.has('debug')) {
     window.__app = {

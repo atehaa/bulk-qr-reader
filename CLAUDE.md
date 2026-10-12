@@ -14,6 +14,7 @@ Bulk QR Reader is a static, browser-only page for GitHub Pages. There is no back
 **Context:**
 - The UI is bilingual (English / Turkish, `js/i18n.js`; header toggle, remembered in `localStorage`). Every user-visible string goes through `t()` or a `data-i18n*` attribute. The user writes in Turkish.
 - Visual design is the "Pebble" theme (`style.css` tokens on `:root`, light + dark). The home screen always shows Camera, Photos and Folder (Folder is hidden on iOS, which has no folder picker). The app keeps no history: everything lives in the current page session.
+- Startup: `boot()` hooks up `decoderReady` before anything else, so the status banner can never hang on "Loading…". It turns into a warning (with Reload) after `DECODER_SLOW_MS`. An inline watchdog in `index.html` reports a failed start if `window.__bqrBooted` is not set within 15 s (e.g. a stale cached module right after a deploy).
 - The footer credit ("Murat Süzük … Mercan Eczanesi") must stay visible: in the home privacy card and at the bottom of the workspace.
 - The app is **mobile-first**, and desktop must keep working.
 - A key real-world case is GS1/ITS Data Matrix codes on medicine boxes, photographed as 24–48MP iPhone HEIC files.

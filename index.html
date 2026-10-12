@@ -64,7 +64,11 @@
     <input id="nativeCamInput" type="file" accept="image/*" capture="environment" hidden>
   </header>
 
-  <div id="decoderStatus" class="decoder-status" role="status" data-i18n="loadingDecoder">Loading decoder…</div>
+  <div id="decoderStatus" class="decoder-status" role="status">
+    <span class="spinner" aria-hidden="true"></span>
+    <span class="ds-text" data-i18n="loadingDecoder">Loading the code reader…</span>
+    <button type="button" class="btn small ds-reload" data-i18n="reload" onclick="location.reload()" hidden>Reload</button>
+  </div>
 
   <main>
     <section id="empty" class="home">
@@ -259,6 +263,23 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
+  <script>
+    // Watchdog: if the app modules never start (e.g. a stale cached file right after a deploy),
+    // say so instead of showing "Loading…" forever. app.js sets window.__bqrBooted.
+    setTimeout(function () {
+      if (window.__bqrBooted) return;
+      var el = document.getElementById('decoderStatus');
+      var tr = /^tr\b/i.test((navigator.languages && navigator.languages[0]) || navigator.language || '');
+      el.hidden = false;
+      el.classList.add('fatal');
+      el.querySelector('.ds-text').textContent = tr
+        ? 'Uygulama başlatılamadı. Lütfen sayfayı yenileyin.'
+        : 'The app could not start. Please reload the page.';
+      var b = el.querySelector('.ds-reload');
+      b.textContent = tr ? 'Yenile' : 'Reload';
+      b.hidden = false;
+    }, 15000);
+  </script>
   <script type="module" src="./js/app.js"></script>
 </body>
 </html>
