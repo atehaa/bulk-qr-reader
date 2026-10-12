@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reader Self-test</title>
+  <style>
+    body { font: 14px/1.4 system-ui, sans-serif; margin: 16px; background: #f6f7f9; color: #1b1f24; }
+    table { border-collapse: collapse; width: 100%; background: #fff; }
+    td, th { border: 1px solid #ddd; padding: 6px 8px; text-align: left; vertical-align: top; }
+    .PASS { color: #15803d; font-weight: 700; }
+    .FAIL { color: #b91c1c; font-weight: 700; }
+    #sum { font-size: 18px; font-weight: 700; margin: 8px 0 12px; }
+    code { font-size: 12px; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h1>Self-test</h1>
+  <p>Runs the real scanner on generated images. Results also in <code>window.selftestResult</code>.</p>
+  <div id="sum">Running…</div>
+  <table><thead><tr><th>Case</th><th>Result</th><th>Details</th><th>ms</th></tr></thead><tbody id="rows"></tbody></table>
+
+  <script type="module">
+    import { SCENARIOS, canvas, code, draw } from './scenarios.js';
+    import { scanBitmap, planTiles } from '../js/scanner.js';
+    import { loadBitmap } from '../js/imageLoader.js';
+    import { decoderReady } from '../js/decoderClient.js';
+    import { TILE_MAX_AREA, TILE_MIN_OVERLAP } from '../js/config.js';
+
+    const result = { done: false, passed: 0, failed: 0, cases: [] };
+    window.selftestResult = result;
+    const rows = document.getElementById('rows');
+
+    async function run(name, fn) {
+      const t0 = performance.now();
+      let ok = false;
+      let detail = '';
+      try {
+        detail = (await fn()) || '';
+        ok = true;
+      } catch (err) {
+        detail = String(err?.message || err);
+      }
+      const ms = Math.round(performance.now() - t0);
+      result.cases.push({ name, ok, detail, ms });
+      ok ? result.passed++ : result.failed++;
+      const tr = document.createElement('tr');
+      for (const [i, v] of [name, ok ? 'PASS' : 'FAIL', detail, ms].entries()) {
+        const td = document.createElement('td');
+        if (i === 1) td.className = v;
+        const c = document.createElement('code');
+        c.textContent = v;
+        td.append(i === 2 ? c : v);
+        tr.append(td);
+      }
+      rows.append(tr);
+    }
+
+    function assert(cond, msg) {
+      if (!cond) throw new Error(msg);
+    }
+
+    const toBlob = (c, type = 'image/png', q = 0.92) => new Promise(r => c.toBlob(r, type, q));
+
+    async function scanCanvas(c, opts = {}) {
+      const blob = await toBlob(c, c.width * c.height > 20e6 ? 'image/jpeg' : 'image/png');
+      const { bitmap } = await loadBitmap(new File([blob], 'x', { type: blob.type }));
+      try {
+        return await scanBitmap(bitmap, opts);
+      } finally {
+        bitmap.close();
+      }
+    }
+
+    await decoderReady;
+
+    // ---- tile planner ----
+    await run('planTiles: limits, coverage, overlap', () => {
+      const out = [];
+      for (const [W, H] of [[5712, 4284], [6048, 8064], [8064, 6048], [9000, 3000], [12000, 9000], [4097, 4097], [16000, 1200]]) {
+        const tiles = planTiles(W, H);
+        for (const t of tiles) {
+          assert(t.w * t.h <= TILE_MAX_AREA, `${W}×${H}: tile area ${t.w * t.h}`);
+          assert(t.x >= 0 && t.y >= 0 && t.x + t.w <= W && t.y + t.h <= H, `${W}×${H}: tile outside image`);
+        }
+        const xs = [...new Set(tiles.map(t => t.x))].sort((a, b) => a - b);
+        const ys = [...new Set(tiles.map(t => t.y))].sort((a, b) => a - b);
+        const { w, h } = tiles[0];
+        assert(xs[0] === 0 && xs.at(-1) + w === W, `${W}×${H}: x coverage`);
+        assert(ys[0] === 0 && ys.at(-1) + h === H, `${W}×${H}: y coverage`);
+        for (let i = 1; i < xs.length; i++) assert(xs[i - 1] + w - xs[i] >= TILE_MIN_OVERLAP * w - 1, `${W}×${H}: x overlap`);
+        for (let i = 1; i < ys.length; i++) assert(ys[i - 1] + h - ys[i] >= TILE_MIN_OVERLAP * h - 1, `${W}×${H}: y overlap`);
+        out.push(`${W}×${H} → ${tiles.length} × ${w}×${h}`);
+      }
+      return out.join('\n');
+    });
+
+    // ---- scenarios ----
+    for (const s of SCENARIOS) {
+      await run(s.name, async () => {
+        const c = await s.make(planTiles);
+        const { qrs } = await scanCanvas(c);
+        const texts = qrs.map(q => q.text);
+        if (s.expect) {
+          assert(JSON.stringify(texts) === JSON.stringify(s.expect), `got ${JSON.stringify(texts)}`);
+        }
+        if (s.contains) {
+          for (const t of s.contains) assert(texts.includes(t), `missing ${t}; got ${JSON.stringify(texts)}`);
+        }
+        return `${texts.length} codes: ${JSON.stringify(texts).slice(0, 160)}`;
+      });
+    }
+
+    // ---- cancel ----
+    await run('cancel mid-scan (8000×6000)', async () => {
+      const c = await SCENARIOS.find(s => s.name.startsWith('07')).make();
+      const { bitmap } = await loadBitmap(new File([await toBlob(c, 'image/jpeg')], 'x', { type: 'image/jpeg' }));
+      const ac = new AbortController();
+      const t0 = performance.now();
+      setTimeout(() => ac.abort(), 150);
+      let res;
+      let err;
+      try {
+        res = await scanBitmap(bitmap, { signal: ac.signal });
+      } catch (e) {
+        err = e;
+      } finally {
+        bitmap.close();
+      }
+      const ms = Math.round(performance.now() - t0);
+      assert(!res, 'scan finished despite abort');
+      assert(err?.name === 'AbortError', `expected AbortError, got ${err?.name}: ${err?.message}`);
+      assert(ms < 3000, `abort took ${ms}ms`);
+      return `AbortError after ${ms}ms`;
+    });
+
+    // ---- EXIF orientation ----
+    function withOrientation(jpegBytes, orientation) {
+      const tiff = [0x4d, 0x4d, 0x00, 0x2a, 0, 0, 0, 8, 0, 1, 0x01, 0x12, 0, 3, 0, 0, 0, 1, 0, orientation, 0, 0, 0, 0, 0, 0];
+      const payload = [0x45, 0x78, 0x69, 0x66, 0, 0, ...tiff];
+      const len = payload.length + 2;
+      const app1 = [0xff, 0xe1, len >> 8, len & 255, ...payload];
+      const out = new Uint8Array(jpegBytes.length + app1.length);
+      out.set(jpegBytes.subarray(0, 2), 0);
+      out.set(app1, 2);
+      out.set(jpegBytes.subarray(2), 2 + app1.length);
+      return out;
+    }
+    await run('EXIF orientation 6 (rotate 90° CW)', async () => {
+      const [c, ctx] = canvas(600, 400);
+      draw(ctx, await code('exif-rot'), 60, 80, 240); // center (180, 200) in stored pixels
+      const bytes = new Uint8Array(await (await toBlob(c, 'image/jpeg', 0.95)).arrayBuffer());
+      const file = new File([withOrientation(bytes, 6)], 'rot6.jpg', { type: 'image/jpeg' });
+      const { bitmap } = await loadBitmap(file);
+      const dims = `${bitmap.width}×${bitmap.height}`;
+      const { qrs } = await scanBitmap(bitmap);
+      bitmap.close();
+      assert(dims === '400×600', `bitmap ${dims}, expected 400×600 (orientation ignored?)`);
+      assert(qrs.length === 1 && qrs[0].text === 'exif-rot', `got ${qrs.length} codes`);
+      const { cx, cy, size } = qrs[0];
+      assert(Math.hypot(cx - 200, cy - 180) < size / 2, `center (${cx.toFixed(0)}, ${cy.toFixed(0)}), expected (200, 180)`);
+      return `${dims}, center (${cx.toFixed(0)}, ${cy.toFixed(0)})`;
+    });
+
+    result.done = true;
+    document.getElementById('sum').textContent = `${result.passed} passed · ${result.failed} failed`;
+    document.getElementById('sum').className = result.failed ? 'FAIL' : 'PASS';
+  </script>
+</body>
+</html>

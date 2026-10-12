@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>QR Test Images</title>
+  <style>
+    body { font: 14px/1.4 system-ui, sans-serif; margin: 20px; background: #f6f7f9; color: #1b1f24; }
+    .grid { display: flex; flex-wrap: wrap; gap: 16px; }
+    figure { margin: 0; background: #fff; padding: 8px; border-radius: 8px; border: 1px solid #ddd; }
+    figure img { height: 200px; display: block; }
+    figcaption { margin-top: 6px; font-size: 12px; }
+    button { font: inherit; padding: 6px 12px; }
+  </style>
+</head>
+<body>
+  <h1>Test image generator</h1>
+  <p>Dev tool: images with known code layouts. Download them and drop them into the app, or run <a href="selftest.html">selftest.html</a>.</p>
+  <p><button id="dl">Download all as PNG</button> <button id="dlJpg">Download all as JPEG</button></p>
+  <div id="grid" class="grid"></div>
+
+  <script type="module">
+    import { SCENARIOS } from './scenarios.js';
+    import { planTiles } from '../js/scanner.js';
+
+    const outputs = [];
+    const grid = document.getElementById('grid');
+    for (const s of SCENARIOS) {
+      const c = await s.make(planTiles);
+      outputs.push([s.name, c]);
+      const fig = document.createElement('figure');
+      const img = document.createElement('img');
+      img.src = c.toDataURL('image/jpeg', 0.6);
+      const cap = document.createElement('figcaption');
+      cap.textContent = `${s.name} (${c.width}×${c.height})`;
+      fig.append(img, cap);
+      grid.append(fig);
+    }
+    window.testImages = outputs; // for automated checks
+
+    async function downloadAll(type, ext) {
+      for (const [name, c] of outputs) {
+        const blob = await new Promise(r => c.toBlob(r, type, 0.92));
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `${name}.${ext}`;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+        await new Promise(r => setTimeout(r, 250));
+      }
+    }
+    document.getElementById('dl').onclick = () => downloadAll('image/png', 'png');
+    document.getElementById('dlJpg').onclick = () => downloadAll('image/jpeg', 'jpg');
+  </script>
+</body>
+</html>

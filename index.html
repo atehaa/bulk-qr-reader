@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f6f7f9" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#111418" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>Bulk QR Reader</title>
+  <meta name="description" content="Read every QR and Data Matrix code in many images or camera shots at once. Runs entirely in your browser.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%234363d8'/%3E%3Cpath fill='%23fff' d='M6 6h8v8H6zm2 2v4h4V8zm10-2h8v8h-8zm2 2v4h4V8zM6 18h8v8H6zm2 2v4h4v-4zm10-2h3v3h-3zm5 0h3v3h-3zm-5 5h3v3h-3zm5 0h3v3h-3z'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="./style.css">
+  <link rel="modulepreload" href="./js/app.js">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <h1>Bulk QR Reader</h1>
+      <p>QR &amp; Data Matrix from photos, folders or the camera — all in your browser, nothing is uploaded.</p>
+    </div>
+    <div class="pickers desk-only">
+      <button type="button" class="btn" data-action="camera">📷 Camera</button>
+      <button type="button" class="btn" data-action="pick-files">Choose images</button>
+      <button type="button" class="btn" data-action="pick-folder">Choose folder</button>
+    </div>
+    <input id="filesInput" type="file" multiple accept="image/*,.heic,.heif" hidden>
+    <input id="folderInput" type="file" webkitdirectory multiple hidden>
+    <input id="nativeCamInput" type="file" accept="image/*" capture="environment" hidden>
+  </header>
+
+  <div id="decoderStatus" class="decoder-status">Loading decoder…</div>
+
+  <main>
+    <section id="empty" class="empty">
+      <div class="dz-inner">
+        <div class="dz-icon" aria-hidden="true">▣</div>
+        <p class="dz-title">Scan codes from photos</p>
+        <p class="dz-sub hide-touch">Drag &amp; drop images or folders anywhere, or paste with <kbd>⌘/Ctrl</kbd>+<kbd>V</kbd>.</p>
+        <p class="dz-sub show-touch">Take photos with the camera or pick them from your library.</p>
+        <div class="empty-actions">
+          <button type="button" class="btn primary big" data-action="camera">📷 Scan with camera</button>
+          <button type="button" class="btn big" data-action="pick-files">🖼 Choose photos</button>
+          <button type="button" class="btn big" data-action="pick-folder">📁 Choose folder</button>
+        </div>
+        <p class="dz-formats">JPEG · PNG · HEIC · WebP · AVIF · GIF · BMP</p>
+      </div>
+    </section>
+
+    <section id="workspace">
+      <div class="toolbar">
+        <span id="count" class="count"></span>
+        <label class="check desk-only" title="More scales and settings. Slower, occasionally finds a few more codes.">
+          <input type="checkbox" data-setting="thorough"> Thorough scan
+        </label>
+        <span class="spacer"></span>
+        <button type="button" class="btn ghost desk-only" data-action="clear">Clear all</button>
+        <button type="button" class="btn desk-only" data-action="reprocess" hidden>Re-process all</button>
+        <button type="button" class="btn primary desk-only" data-action="process">Process</button>
+        <button type="button" class="btn icon mobile-only" data-action="menu" aria-label="More actions">⋯</button>
+      </div>
+
+      <div id="progress" class="progress" hidden>
+        <div class="bar"><div id="progressBar"></div></div>
+        <span id="progressText"></span>
+        <button type="button" class="btn ghost small" data-action="stop">Stop</button>
+      </div>
+
+      <div id="gallery" class="gallery" aria-label="Images"></div>
+
+      <section id="results" class="results" hidden>
+        <div class="results-head">
+          <h2>Decoded codes</h2>
+          <p id="summary" class="summary"></p>
+        </div>
+        <div class="copy-all">
+          <button id="copyLabeled" type="button" class="btn primary" data-action="copy-labeled">Copy with labels</button>
+          <button id="copyContent" type="button" class="btn" data-action="copy-content">Copy content only</button>
+        </div>
+        <div id="list" class="list"></div>
+        <details class="plain">
+          <summary>Show as plain text</summary>
+          <textarea id="plainOutput" readonly spellcheck="false" wrap="off" rows="8"></textarea>
+        </details>
+        <p class="hint">Tag <code>3-2</code> = image 3, code 2 — the same colored tag is drawn on the image. Tap a row to zoom to it. Reads QR, Data Matrix, Aztec and PDF417; line breaks inside a code are shown as ⏎.</p>
+      </section>
+    </section>
+  </main>
+
+  <nav class="bottombar" aria-label="Actions">
+    <button type="button" class="bb-btn" data-action="camera"><span aria-hidden="true">📷</span>Camera</button>
+    <button type="button" class="bb-btn" data-action="pick-files"><span aria-hidden="true">🖼</span>Photos</button>
+    <button type="button" class="bb-btn primary" data-action="process">Process</button>
+  </nav>
+
+  <div id="dropOverlay" class="drop-overlay" hidden><div>Drop images or folders</div></div>
+
+  <dialog id="menu" class="sheet">
+    <h3>More</h3>
+    <button type="button" class="sheet-btn" data-action="pick-folder">📁 Choose folder</button>
+    <label class="sheet-btn check">
+      <input type="checkbox" data-setting="thorough"> Thorough scan <small>slower, occasionally finds more</small>
+    </label>
+    <button type="button" class="sheet-btn" data-action="reprocess" hidden>↻ Re-process all</button>
+    <button type="button" class="sheet-btn danger" data-action="clear">Clear all</button>
+    <form method="dialog"><button class="btn ghost wide">Close</button></form>
+  </dialog>
+
+  <dialog id="camChooser" class="sheet">
+    <h3>Camera</h3>
+    <button type="button" class="sheet-btn mode" data-mode="single">
+      <b>Single shot</b><small>Snap one photo and see its codes right away.</small>
+    </button>
+    <button type="button" class="sheet-btn mode" data-mode="bulk">
+      <b>Bulk</b><small>Snap many photos in a row; they are scanned in the background, review at the end.</small>
+    </button>
+    <button type="button" class="link" data-native>Use the phone's camera app instead</button>
+    <button type="button" class="btn ghost wide" data-cancel>Cancel</button>
+  </dialog>
+
+  <dialog id="camera" class="camera" aria-label="Camera">
+    <video playsinline muted autoplay></video>
+    <div class="cam-flash"></div>
+    <div class="cam-top">
+      <button type="button" class="cam-btn cam-close" aria-label="Close camera">✕</button>
+      <div class="cam-mode" role="group" aria-label="Mode">
+        <button type="button" data-mode="single">Single</button>
+        <button type="button" data-mode="bulk">Bulk</button>
+      </div>
+      <span class="cam-res"></span>
+      <button type="button" class="cam-btn cam-torch" aria-label="Flashlight" aria-pressed="false" hidden>⚡</button>
+      <button type="button" class="cam-btn cam-switch" aria-label="Switch camera" hidden>⟲</button>
+    </div>
+    <p class="cam-status"></p>
+    <div class="cam-error" hidden>
+      <p class="cam-error-text"></p>
+      <button type="button" class="btn primary cam-native">Use phone camera app</button>
+    </div>
+    <div class="cam-bottom">
+      <p class="cam-hint"></p>
+      <div class="cam-bulk">
+        <span class="cam-count"></span>
+        <div class="cam-dots"></div>
+      </div>
+      <input class="cam-zoom" type="range" aria-label="Zoom" hidden>
+      <div class="cam-row">
+        <span class="cam-side"></span>
+        <button type="button" class="shutter" aria-label="Take photo"></button>
+        <span class="cam-side"><button type="button" class="btn cam-done">Done</button></span>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="viewer" class="viewer" aria-label="Image viewer">
+    <div class="v-top">
+      <button type="button" class="btn icon v-close" aria-label="Close">✕</button>
+      <span class="v-title"></span>
+      <span class="spacer"></span>
+      <button type="button" class="btn icon v-zoom-out hide-touch" aria-label="Zoom out">−</button>
+      <button type="button" class="btn icon v-fit hide-touch" aria-label="Fit">⤢</button>
+      <button type="button" class="btn icon v-zoom-in hide-touch" aria-label="Zoom in">+</button>
+      <button type="button" class="btn icon v-prev" aria-label="Previous image">‹</button>
+      <button type="button" class="btn icon v-next" aria-label="Next image">›</button>
+    </div>
+    <div class="v-body">
+      <div class="v-stage">
+        <div class="v-content"><img class="v-img" alt="" draggable="false"></div>
+        <p class="v-loading" hidden></p>
+        <p class="v-status" hidden>Scanning…</p>
+      </div>
+      <aside class="v-panel">
+        <p class="v-panel-head"></p>
+        <div class="v-codes"></div>
+        <div class="v-actions"></div>
+      </aside>
+    </div>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script type="module" src="./js/app.js"></script>
+</body>
+</html>
